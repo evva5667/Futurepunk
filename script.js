@@ -527,6 +527,16 @@ function generateSessionCode() {
   return Math.floor(100000 + Math.random() * 900000).toString();
 }
 
+function getDeviceId() {
+  // Get or create a device ID that persists across refreshes
+  let deviceId = localStorage.getItem("reconnect_device_id");
+  if (!deviceId) {
+    deviceId = `device_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+    localStorage.setItem("reconnect_device_id", deviceId);
+  }
+  return deviceId;
+}
+
 function saveSession(code, data) {
   const sessionData = {
     ...data,
@@ -618,6 +628,7 @@ function showToast(message, type = "success") {
 // Session Management
 function createSession() {
   const code = generateSessionCode();
+  const deviceId = getDeviceId();
   state.currentSessionCode = code;
   state.currentSeat = "1";
   state.answers = {};
@@ -625,6 +636,7 @@ function createSession() {
   saveSession(code, { 
     seat1Connected: true, 
     seat1Ready: false,
+    seat1DeviceId: deviceId,
     seat2Connected: false,
     seat2Ready: false
   });
@@ -644,6 +656,7 @@ function joinSession(code) {
   }
 
   // If Person 1 is already connected, great. If not, we'll wait for them.
+  const deviceId = getDeviceId();
   state.currentSessionCode = code;
   state.currentSeat = "2";
   state.answers = {};
@@ -651,7 +664,8 @@ function joinSession(code) {
   // Mark seat 2 as connected
   saveSession(code, { 
     ...sessionData, 
-    seat2Connected: true, 
+    seat2Connected: true,
+    seat2DeviceId: deviceId, 
     seat2Ready: false,
     seat2Joined: true 
   });
@@ -943,8 +957,10 @@ function updateJoinInterface() {
       const urlSeat2 = urlParams.get("seat2") === "taken";
       
       const sessionData = loadSession(code);
-      const seat1Taken = urlSeat1 || !!(sessionData?.seat1 || sessionData?.seat1Connected || sessionData?.seat1Ready);
-      const seat2Taken = urlSeat2 || !!(sessionData?.seat2 || sessionData?.seat2Connected || sessionData?.seat2Ready);
+      
+      // URL params are source of truth for cross-device, but also check device IDs
+      const seat1Taken = urlSeat1 || !!(sessionData?.seat1DeviceId || sessionData?.seat1Connected || sessionData?.seat1Ready);
+      const seat2Taken = urlSeat2 || !!(sessionData?.seat2DeviceId || sessionData?.seat2Connected || sessionData?.seat2Ready);
       
       // Update button states
       const seat1Btn = document.getElementById("join-seat-1");
@@ -2106,33 +2122,61 @@ function initApp() {
       renderResultSheet();
       showSheet("result-sheet", "result-sheet-overlay");
     }
-  } else if (code) {
-    // URL has code - check seat availability from URL params and auto-assign if only one seat available
-    const params = new URLSearchParams(window.location.search);
-    const urlSeat1 = params.get("seat1") === "taken";
-    const urlSeat2 = params.get("seat2") === "taken";
-    
+  } else if (code && /^\d{6}$/.test(code)) {
+    // URL has code - check if user is already in this session (restore on refresh)
     const sessionData = loadSession(code);
-    const seat1Taken = urlSeat1 || !!(sessionData?.seat1 || sessionData?.seat1Connected || sessionData?.seat1Ready);
-    const seat2Taken = urlSeat2 || !!(sessionData?.seat2 || sessionData?.seat2Connected || sessionData?.seat2Ready);
+    const deviceId = getDeviceId();
     
-    // If Seat 1 is taken and Seat 2 is available, automatically join as Seat 2
-    if (seat1Taken && !seat2Taken) {
-      const success = joinSession(code);
-      if (success) {
-        // Update URL to mark seat 2 as taken
-        const baseUrl = window.location.origin + window.location.pathname;
-        const url = `${baseUrl}?code=${code}&seat1=taken&seat2=taken`;
-        window.history.replaceState({}, "", url);
-        
-        state.showQuestionSheet = true;
-        renderQuestionSheet();
-        showSheet("question-sheet", "question-sheet-overlay");
-        updateJoinInterface();
-        return; // Don't show join interface, go straight to questions
+    // Check if this device is already Seat 1 or Seat 2 by comparing device IDs
+    const isSeat1 = sessionData?.seat1DeviceId === deviceId;
+    const isSeat2 = sessionData?.seat2DeviceId === deviceId;
+    
+    if (isSeat1) {
+      // This device is Seat 1 - restore their session
+      state.currentSessionCode = code;
+      state.currentSeat = "1";
+      state.answers = sessionData.seat1 || {};
+      // Update URL to reflect seat 1 is taken
+      const baseUrl = window.location.origin + window.location.pathname;
+      const url = `${baseUrl}?code=${code}&seat1=taken`;
+      window.history.replaceState({}, "", url);
+    } else if (isSeat2) {
+      // This device is Seat 2 - restore their session
+      state.currentSessionCode = code;
+      state.currentSeat = "2";
+      state.answers = sessionData.seat2 || {};
+      // Update URL to reflect both seats are taken
+      const baseUrl = window.location.origin + window.location.pathname;
+      const url = `${baseUrl}?code=${code}&seat1=taken&seat2=taken`;
+      window.history.replaceState({}, "", url);
+    } else {
+      // User is not in this session yet - check seat availability from URL params
+      const urlSeat1 = params.get("seat1") === "taken";
+      const urlSeat2 = params.get("seat2") === "taken";
+      
+      // Use URL params as source of truth (works across devices)
+      // Also check if seats have device IDs (meaning someone has joined)
+      const seat1Taken = urlSeat1 || !!(sessionData?.seat1DeviceId || sessionData?.seat1Connected || sessionData?.seat1Ready);
+      const seat2Taken = urlSeat2 || !!(sessionData?.seat2DeviceId || sessionData?.seat2Connected || sessionData?.seat2Ready);
+      
+      // If Seat 1 is taken and Seat 2 is available, automatically join as Seat 2
+      if (seat1Taken && !seat2Taken) {
+        const success = joinSession(code);
+        if (success) {
+          // Update URL to mark seat 2 as taken
+          const baseUrl = window.location.origin + window.location.pathname;
+          const url = `${baseUrl}?code=${code}&seat1=taken&seat2=taken`;
+          window.history.replaceState({}, "", url);
+          
+          state.showQuestionSheet = true;
+          renderQuestionSheet();
+          showSheet("question-sheet", "question-sheet-overlay");
+          updateJoinInterface();
+          return; // Don't show join interface, go straight to questions
+        }
       }
+      // Otherwise, show seat selection interface
     }
-    // Otherwise, show seat selection interface
   }
 
   // Initialize components
@@ -2140,8 +2184,17 @@ function initApp() {
   initShaderSelector();
   updateCenterDisplay();
   
-  // Initialize join interface and set up polling
-  if (!state.currentSessionCode) {
+  // If user is already in a session (restored from refresh), show their current state
+  if (state.currentSessionCode) {
+    // User is already in a session - show questions if they have progress, or let them continue
+    if (Object.keys(state.answers).length > 0) {
+      state.showQuestionSheet = true;
+      renderQuestionSheet();
+      showSheet("question-sheet", "question-sheet-overlay");
+    }
+    updateJoinInterface(); // This will hide the join interface
+  } else {
+    // User is not in a session - show join interface
     updateJoinInterface();
     
     // Poll for seat availability updates (when no session is active but URL has code)
@@ -2161,8 +2214,10 @@ function initApp() {
           const urlSeat2 = currentParams.get("seat2") === "taken";
           
           const sessionData = loadSession(code);
-          const seat1Taken = urlSeat1 || !!(sessionData?.seat1 || sessionData?.seat1Connected || sessionData?.seat1Ready);
-          const seat2Taken = urlSeat2 || !!(sessionData?.seat2 || sessionData?.seat2Connected || sessionData?.seat2Ready);
+          
+          // URL params are source of truth for cross-device
+          const seat1Taken = urlSeat1 || !!(sessionData?.seat1DeviceId || sessionData?.seat1Connected || sessionData?.seat1Ready);
+          const seat2Taken = urlSeat2 || !!(sessionData?.seat2DeviceId || sessionData?.seat2Connected || sessionData?.seat2Ready);
           
           // Auto-join as Seat 2 if Seat 1 is taken and Seat 2 is available
           if (seat1Taken && !seat2Taken) {
@@ -2327,7 +2382,7 @@ function handleJoinAsSeat1() {
     // Check if seat 1 is already taken (check both localStorage and URL params)
     const sessionData = loadSession(code);
     const urlSeat1 = params.get("seat1") === "taken";
-    const seat1Taken = urlSeat1 || !!(sessionData?.seat1 || sessionData?.seat1Connected || sessionData?.seat1Ready);
+    const seat1Taken = urlSeat1 || !!(sessionData?.seat1DeviceId || sessionData?.seat1Connected || sessionData?.seat1Ready);
     
     if (seat1Taken) {
       showToast("Seat 1 is already taken. Please choose Seat 2.", "error");
@@ -2387,7 +2442,7 @@ function handleJoinAsSeat2() {
   // Check if seat 2 is already taken (check both localStorage and URL params)
   const sessionData = loadSession(code);
   const urlSeat2 = params.get("seat2") === "taken";
-  const seat2Taken = urlSeat2 || !!(sessionData?.seat2 || sessionData?.seat2Connected || sessionData?.seat2Ready);
+  const seat2Taken = urlSeat2 || !!(sessionData?.seat2DeviceId || sessionData?.seat2Connected || sessionData?.seat2Ready);
   
   if (seat2Taken) {
     showToast("Seat 2 is already taken.", "error");
@@ -2397,7 +2452,7 @@ function handleJoinAsSeat2() {
   
   // Check if seat 1 is taken - Seat 2 can only join if Seat 1 has joined first
   const urlSeat1 = params.get("seat1") === "taken";
-  const seat1Taken = urlSeat1 || !!(sessionData?.seat1 || sessionData?.seat1Connected || sessionData?.seat1Ready);
+  const seat1Taken = urlSeat1 || !!(sessionData?.seat1DeviceId || sessionData?.seat1Connected || sessionData?.seat1Ready);
   if (!seat1Taken) {
     showToast("Please wait for Seat 1 to join first.", "error");
     updateJoinInterface(); // Refresh interface
