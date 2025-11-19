@@ -1,0 +1,178 @@
+<!DOCTYPE html>
+<html lang="en" class="dark">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Reconnect Booth - UAE 2050</title>
+  <link rel="stylesheet" href="style.css">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:wght@400;500&family=Inter:wght@400;500&display=swap" rel="stylesheet">
+</head>
+<body>
+  <div class="app-container">
+    <!-- Top Left: Reconnect Booth Title -->
+    <div class="app-title">Reconnect Booth</div>
+
+    <!-- Top Right: Home Link -->
+    <button class="home-link" id="home-button">
+      <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <path stroke-linecap="round" stroke-linejoin="round" d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6"/>
+      </svg>
+      Home
+    </button>
+
+    <!-- Toast Container -->
+    <div id="toast-container" class="toast-container"></div>
+
+    <!-- Shader Selector -->
+    <div id="shader-selector" class="shader-selector"></div>
+
+    <!-- Main Layout -->
+    <div class="main-layout">
+      <!-- Shader Canvas Container -->
+      <div class="shader-container">
+        <canvas id="shader-canvas" class="shader-canvas"></canvas>
+        
+        <!-- Center Session Display -->
+        <div id="center-display" class="center-display"></div>
+
+        <!-- Join Interface (shown when no session is active) -->
+        <div id="join-interface" class="join-interface hidden">
+          <p class="join-interface-text">Join as:</p>
+          <div class="join-interface-content">
+            <button class="btn btn-seat" id="join-seat-1">
+              <span class="seat-label">SEAT 1</span>
+              <span class="seat-status" id="seat-1-status"></span>
+            </button>
+            <button class="btn btn-seat" id="join-seat-2">
+              <span class="seat-label">SEAT 2</span>
+              <span class="seat-status" id="seat-2-status"></span>
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Start Sheet -->
+    <div id="start-sheet-overlay" class="sheet-overlay hidden"></div>
+    <div id="start-sheet" class="sheet sheet-bottom hidden">
+      <div class="sheet-header">
+        <h2 class="sheet-title">Reconnect Booth</h2>
+        <p class="sheet-description">UAE 2050 — Answer quick questions to discover your compatibility</p>
+        <button class="sheet-close" aria-label="Close">×</button>
+      </div>
+      <div class="sheet-content">
+        <div id="start-sheet-body" class="start-sheet-body">
+          <!-- Content will be dynamically inserted -->
+        </div>
+      </div>
+    </div>
+
+    <!-- Waiting Sheet (Person 1 waiting for Person 2) -->
+    <div id="waiting-sheet-overlay" class="sheet-overlay hidden"></div>
+    <div id="waiting-sheet" class="sheet sheet-bottom hidden">
+      <div class="sheet-header">
+        <h2 class="sheet-title">Waiting for Person 2</h2>
+        <p class="sheet-description">Share the link below with Person 2 to begin</p>
+        <button class="sheet-close" aria-label="Close">×</button>
+      </div>
+      <div class="sheet-content">
+        <div id="waiting-sheet-body" class="waiting-sheet-body">
+          <!-- Content will be dynamically inserted -->
+        </div>
+      </div>
+    </div>
+
+    <!-- Person 1 Waiting Sheet (Person 2 sees this) -->
+    <div id="person1-waiting-sheet-overlay" class="sheet-overlay hidden"></div>
+    <div id="person1-waiting-sheet" class="sheet sheet-bottom hidden">
+      <div class="sheet-header">
+        <h2 class="sheet-title">Connected!</h2>
+        <p class="sheet-description">Waiting for Person 1 to begin...</p>
+        <button class="sheet-close" aria-label="Close">×</button>
+      </div>
+      <div class="sheet-content">
+        <div id="person1-waiting-sheet-body" class="waiting-sheet-body">
+          <!-- Content will be dynamically inserted -->
+        </div>
+      </div>
+    </div>
+
+    <!-- Connected Sheet (shown when both are connected) -->
+    <div id="connected-sheet-overlay" class="sheet-overlay hidden"></div>
+    <div id="connected-sheet" class="sheet sheet-bottom hidden">
+      <div class="sheet-header">
+        <h2 class="sheet-title">Connected!</h2>
+        <p class="sheet-description">Both players are ready</p>
+        <button class="sheet-close" aria-label="Close">×</button>
+      </div>
+      <div class="sheet-content">
+        <div id="connected-sheet-body" class="waiting-sheet-body">
+          <!-- Content will be dynamically inserted -->
+        </div>
+      </div>
+    </div>
+
+    <!-- Question Sheet -->
+    <div id="question-sheet-overlay" class="sheet-overlay hidden"></div>
+    <div id="question-sheet" class="sheet sheet-bottom hidden">
+      <div class="sheet-header">
+        <div class="sheet-header-content">
+          <div>
+            <h2 class="sheet-title" id="question-sheet-title">Seat 1</h2>
+            <p class="sheet-description">Answer these questions to discover your compatibility</p>
+          </div>
+          <div class="sheet-header-actions">
+            <div class="session-code-display" id="question-session-code">Session: </div>
+            <button class="btn btn-ghost btn-sm" id="question-go-home">
+              <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6"/>
+              </svg>
+              Home
+            </button>
+          </div>
+        </div>
+      </div>
+      <div class="sheet-content">
+        <div id="question-carousel-container" class="question-carousel-container">
+          <!-- Question carousel will be dynamically inserted -->
+        </div>
+      </div>
+    </div>
+
+    <!-- Welcome Message Overlay -->
+    <div id="welcome-overlay" class="mid-question-overlay hidden"></div>
+    <div id="welcome-message" class="mid-question-message hidden">
+      <div id="welcome-content" class="mid-question-content">
+        <!-- Content will be dynamically inserted -->
+      </div>
+    </div>
+
+    <!-- Mid-Question Message Overlay -->
+    <div id="mid-question-overlay" class="mid-question-overlay hidden"></div>
+    <div id="mid-question-message" class="mid-question-message hidden">
+      <div id="mid-question-content" class="mid-question-content">
+        <!-- Content will be dynamically inserted -->
+      </div>
+    </div>
+
+    <!-- Result Sheet -->
+    <div id="result-sheet-overlay" class="sheet-overlay hidden"></div>
+    <div id="result-sheet" class="sheet sheet-bottom hidden">
+      <div class="sheet-header">
+        <h2 class="sheet-title">Compatibility Result</h2>
+        <p class="sheet-description" id="result-session-code">Session: </p>
+        <button class="sheet-close" aria-label="Close">×</button>
+      </div>
+      <div class="sheet-content">
+        <div id="result-sheet-body" class="result-sheet-body">
+          <!-- Result content will be dynamically inserted -->
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script src="script.js"></script>
+</body>
+</html>
